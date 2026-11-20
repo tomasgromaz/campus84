@@ -328,6 +328,15 @@ input[type=range]{padding:0;height:32px;margin:0;background:none;border:0;box-sh
 @media (prefers-reduced-transparency:reduce){:root[data-theme=dark]{--g-bg:rgba(20,40,60,.95);--sheet:rgba(12,28,44,.98)}}
 @media (prefers-reduced-transparency:reduce) and (prefers-color-scheme:dark){:root:not([data-theme=light]){--g-bg:rgba(20,40,60,.95);--sheet:rgba(12,28,44,.98)}}
 @media (prefers-reduced-motion:reduce){.sheet{animation:none}.tabs,.pill,.tab svg{transition-duration:.01s!important}}
+
+/* cuenta */
+.acct-p{color:var(--mut);font-size:14px;line-height:1.45;margin:0}
+.acct-mail{font-weight:700;word-break:break-all}
+.set .actions{margin-top:0}
+.acct-del{align-self:flex-start;color:var(--redT)}
+#f_ok{color:var(--brandT);font-size:13.5px;font-weight:700;margin-top:10px}
+#f_ok:empty{display:none}
+.btn[disabled]{opacity:.55;pointer-events:none}
 </style>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
@@ -428,7 +437,7 @@ function ico(n,s){s=s||22;return '<svg width="'+s+'" height="'+s+'" viewBox="0 0
 
 /* ---------- datos ---------- */
 var KEY="campus84.v1";
-var S={materias:[],eventos:[],apuntes:[],links:[],ui:{theme:"auto",glass:null,spring:"normal"}};
+var S={materias:[],eventos:[],apuntes:[],links:[],ui:{theme:"auto",glass:null,spring:"normal"},cloud:{}};
 var canStore=true;
 var COLORS=["#2f6fdb","#0e9f8e","#e0852b","#d6456b","#7a5ad6","#4aa83a","#c9a100","#5b6b7f"];
 var TIPOS=["Entrega","Parcial","Examen final","Clase","Otro"];
@@ -446,11 +455,12 @@ function load(){
   try{
     localStorage.setItem("__t","1");localStorage.removeItem("__t");
     var r=localStorage.getItem(KEY);
-    if(r){var o=JSON.parse(r);["materias","eventos","apuntes","links"].forEach(function(k){if(Array.isArray(o[k]))S[k]=o[k]});if(o.ui&&typeof o.ui==="object")S.ui=o.ui}
+    if(r){var o=JSON.parse(r);["materias","eventos","apuntes","links"].forEach(function(k){if(Array.isArray(o[k]))S[k]=o[k]});if(o.ui&&typeof o.ui==="object")S.ui=o.ui;if(o.cloud&&typeof o.cloud==="object")S.cloud=o.cloud}
   }catch(e){canStore=false}
   normalize();
 }
 function normalize(){
+  if(!S.cloud||typeof S.cloud!=="object")S.cloud={};
   S.ui=Object.assign({theme:"auto",glass:null,spring:"normal"},S.ui&&typeof S.ui==="object"?S.ui:{});
   S.materias.forEach(function(m){m.clases=(Array.isArray(m.clases)?m.clases:[]).filter(function(c){return c&&c.ini})});
   S.eventos.forEach(function(e){if(e.rep&&!Array.isArray(e.done))e.done=[]});
@@ -465,7 +475,7 @@ function applyUI(){
   r.style.setProperty("--spring",SPRINGS[u.spring]||SPRINGS.normal);
 }
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){canStore=false}}
-function commit(){save();render()}
+function commit(){rev++;if(AU)S.cloud.dirty=true;save();render();syncSoon(1500,true)}
 
 /* ---------- estado de UI ---------- */
 var view="campus",filter="pend",agMode="list";
@@ -579,6 +589,7 @@ function vCampus(){
   }else{
     h+='<div class="empty">Guardá acá los enlaces que más usás (un aula, un Drive, un PDF de la cátedra).</div>';
   }
+  h+=acctCard();
   h+=vAjustes();
   h+='<h3 class="sec">Tus datos</h3><button class="btn ghost" data-act="backup">'+ico("save",18)+' Copia de seguridad</button>'+
      '<p class="hint" style="margin-top:8px">Todo lo que cargues se guarda solo en este dispositivo. Con la copia de seguridad lo podés pasar a otro.</p>'+
@@ -768,7 +779,7 @@ function renderContent(){
 /* ---------- hojas (diálogos propios) ---------- */
 var closeBtn='<button class="x" data-act="close" aria-label="Cerrar">×</button>';
 function openSheet(h){$("#sheet").innerHTML=h;$("#overlay").hidden=false;document.body.classList.add("lock");$("#sheet").scrollTop=0}
-function closeSheet(){$("#overlay").hidden=true;$("#sheet").innerHTML="";document.body.classList.remove("lock")}
+function closeSheet(){$("#overlay").hidden=true;$("#sheet").innerHTML="";document.body.classList.remove("lock");if(repaintLater){repaintLater=false;if(view==="campus")renderContent()}if(pendingPull){pendingPull=false;syncSoon(250,true)}}
 function fe(m){var el=$("#f_err");if(el)el.textContent=m}
 var tt;function toast(m){var t=$("#toast");t.textContent=m;t.hidden=false;clearTimeout(tt);tt=setTimeout(function(){t.hidden=true},2200)}
 function confirmSheet(msg,act,id){
@@ -829,7 +840,7 @@ function linkSheet(){
     '<p class="err" id="f_err"></p><div class="actions"><button class="btn primary" data-act="saveLink">Guardar</button></div>');
 }
 function backupSheet(){
-  var json=JSON.stringify({app:"campus84",v:1,data:S});
+  var json=JSON.stringify({app:"campus84",v:1,data:{materias:S.materias,eventos:S.eventos,apuntes:S.apuntes,links:S.links,ui:S.ui}});
   openSheet('<div class="sheet-h"><h2>Copia de seguridad</h2>'+closeBtn+'</div>'+
     '<p class="msg">Copiá este texto y guardalo (en tus notas o mandándotelo por mensaje). Para pasar tus datos a otro dispositivo, pegalo en «Restaurar».</p>'+
     '<label>Tus datos<textarea id="bk_out" rows="4" readonly>'+esc(json)+'</textarea></label>'+
@@ -838,6 +849,299 @@ function backupSheet(){
     '<p class="err" id="f_err"></p>'+
     '<div class="actions"><button class="btn ghost" data-act="restore">Restaurar (reemplaza lo que tenés ahora)</button></div>');
 }
+
+/* ---------- cuenta y sincronización (opcional) ---------- */
+/* Solo se activa si la versión publicada trae la configuración de Firebase.
+   Habla directo con las APIs REST de Firebase (Auth y Firestore): no hay librerías externas. */
+var FB={"apiKey": "AIzaSyCwpN8hbw_NRFf2RpoVD3Hp8SUn0mDlI6w", "projectId": "campus84"};
+var AUTH_KEY="campus84.auth";
+var AU=null,rev=0,syncBusy=false,syncAgain=false,syncT=0,lastTry=0,syncErr="",pendingPull=false,pendingConf=null,retries=0;
+var API={ident:"https://identitytoolkit.googleapis.com/v1/accounts:",tok:"https://securetoken.googleapis.com/v1/token",fs:"https://firestore.googleapis.com/v1/projects/"};
+function cloudOn(){return !!(FB&&FB.apiKey&&FB.projectId)}
+function authLoad(){AU=null;if(!cloudOn())return;try{var r=localStorage.getItem(AUTH_KEY);if(r){var a=JSON.parse(r);if(a&&a.uid&&a.refresh)AU=a}}catch(e){}}
+function authSave(){try{if(AU)localStorage.setItem(AUTH_KEY,JSON.stringify(AU));else localStorage.removeItem(AUTH_KEY)}catch(e){}}
+function mkErr(code){var e=new Error(code);e.code=code;return e}
+var AUTH_ERR={EMAIL_EXISTS:"Ya hay una cuenta con ese mail. Probá ingresar.",INVALID_LOGIN_CREDENTIALS:"Mail o contraseña incorrectos.",INVALID_PASSWORD:"Mail o contraseña incorrectos.",EMAIL_NOT_FOUND:"Mail o contraseña incorrectos.",INVALID_EMAIL:"Ese mail no parece válido.",MISSING_EMAIL:"Escribí tu mail.",MISSING_PASSWORD:"Escribí tu contraseña.",WEAK_PASSWORD:"La contraseña es muy corta: usá al menos 6 caracteres.",USER_DISABLED:"Esa cuenta está deshabilitada.",TOO_MANY_ATTEMPTS_TRY_LATER:"Demasiados intentos. Esperá unos minutos y probá de nuevo.",OPERATION_NOT_ALLOWED:"El ingreso con mail y contraseña no está activado en Firebase.",API_KEY_INVALID:"La clave de la app no es válida. Avisale a quien la administra.",CREDENTIAL_TOO_OLD_LOGIN_AGAIN:"Volvé a ingresar para hacer esto."};
+function errMsg(e){
+  if(!e||e.status==null)return "No hay conexión. Probá de nuevo en un rato.";
+  return AUTH_ERR[e.code]||("No se pudo completar ("+(e.code||e.status)+").");
+}
+async function jfetch(url,opt){
+  var r=await fetch(url,opt),t=await r.text(),j=null;
+  try{j=t?JSON.parse(t):null}catch(e){}
+  if(!r.ok){
+    var m=(j&&j.error&&j.error.message)||"",e2=new Error(m||("HTTP "+r.status));
+    e2.status=r.status;e2.fsStatus=j&&j.error&&j.error.status;
+    e2.code=/api key/i.test(m)?"API_KEY_INVALID":String(m).split(/[ :]/)[0];
+    throw e2;
+  }
+  return j;
+}
+function idCall(m,body){
+  return jfetch(API.ident+m+"?key="+encodeURIComponent(FB.apiKey),{method:"POST",headers:{"Content-Type":"application/json","X-Firebase-Locale":"es"},body:JSON.stringify(body)});
+}
+function setSession(r,email){
+  var same=AU&&AU.uid===r.localId;
+  AU={email:r.email||email,uid:r.localId,refresh:r.refreshToken,idToken:r.idToken,exp:Date.now()+(+r.expiresIn||3600)*1000,verified:same?AU.verified:undefined};
+  authSave();
+}
+async function doAuth(mode,email,pass){
+  var r=await idCall(mode==="up"?"signUp":"signInWithPassword",{email:email,password:pass,returnSecureToken:true});
+  setSession(r,email);
+  if(mode==="up"){AU.verified=false;authSave();idCall("sendOobCode",{requestType:"VERIFY_EMAIL",idToken:AU.idToken}).catch(function(){})}
+  return r;
+}
+async function getToken(){
+  if(!AU)throw mkErr("NOAUTH");
+  if(AU.idToken&&AU.exp-Date.now()>60000)return AU.idToken;
+  try{
+    var r=await jfetch(API.tok+"?key="+encodeURIComponent(FB.apiKey),{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:"grant_type=refresh_token&refresh_token="+encodeURIComponent(AU.refresh)});
+    AU.idToken=r.id_token;AU.refresh=r.refresh_token||AU.refresh;AU.exp=Date.now()+(+r.expires_in||3600)*1000;authSave();
+    return AU.idToken;
+  }catch(e){
+    if(e.status&&/^(TOKEN_EXPIRED|USER_DISABLED|USER_NOT_FOUND|INVALID_REFRESH_TOKEN|MISSING_REFRESH_TOKEN)$/.test(e.code))e.kick=true;
+    throw e;
+  }
+}
+async function refreshVerified(){
+  try{
+    var t=await getToken(),r=await idCall("lookup",{idToken:t}),u=r&&r.users&&r.users[0];
+    if(u&&AU){var v=!!u.emailVerified;if(AU.verified!==v){AU.verified=v;authSave();paintAcct(true)}}
+  }catch(e){}
+}
+function kickOut(){AU=null;authSave();S.cloud={};save();toast("Tu sesión venció. Volvé a ingresar.");paintAcct(true)}
+
+/* --- Firestore: un documento por usuario (users/<uid>) con todo en un campo de texto --- */
+function docUrl(){return API.fs+encodeURIComponent(FB.projectId)+"/databases/(default)/documents/users/"+encodeURIComponent(AU.uid)}
+async function cloudGet(tok){
+  try{return await jfetch(docUrl(),{headers:{Authorization:"Bearer "+tok}})}
+  catch(e){if(e.status===404)return null;throw e}
+}
+function cloudPut(tok,json,cond){
+  var url=docUrl()+"?updateMask.fieldPaths=data&updateMask.fieldPaths=updated";
+  if(cond==="new")url+="&currentDocument.exists=false";
+  else if(cond)url+="&currentDocument.updateTime="+encodeURIComponent(cond);
+  return jfetch(url,{method:"PATCH",headers:{Authorization:"Bearer "+tok,"Content-Type":"application/json"},
+    body:JSON.stringify({fields:{data:{stringValue:json},updated:{integerValue:String(Date.now())}}})});
+}
+function payload(){return JSON.stringify({materias:S.materias,eventos:S.eventos,links:S.links})}
+function hasData(){return !!(S.materias.length||S.eventos.length||S.links.length)}
+function isObjArr(a){return Array.isArray(a)&&a.every(function(x){return x&&typeof x==="object"})}
+function fixData(o){
+  o.materias.forEach(function(m){m.clases=(Array.isArray(m.clases)?m.clases:[]).filter(function(c){return c&&c.ini})});
+  o.eventos.forEach(function(e){if(e.rep&&!Array.isArray(e.done))e.done=[]});
+  return o;
+}
+function parseCloud(doc){
+  var f=doc&&doc.fields&&doc.fields.data&&doc.fields.data.stringValue;
+  if(typeof f!=="string")return null;
+  try{
+    var o=JSON.parse(f);
+    if(o&&isObjArr(o.materias)&&isObjArr(o.eventos))return fixData({materias:o.materias,eventos:o.eventos,links:isObjArr(o.links)?o.links:[]});
+  }catch(e){}
+  return null;
+}
+function sameData(cd){return JSON.stringify({materias:cd.materias,eventos:cd.eventos,links:cd.links})===payload()}
+function mergeBy(a,b){var seen={},out=[];a.forEach(function(x){seen[x.id]=1;out.push(x)});b.forEach(function(x){if(!seen[x.id])out.push(x)});return out}
+function canTouchUI(){return $("#overlay").hidden&&!drag}
+
+async function pushData(tok,cond){
+  var r0=rev,r=await cloudPut(tok,payload(),cond),c=S.cloud;
+  c.uid=AU.uid;c.base=r.updateTime||"";c.at=Date.now();c.dirty=(rev!==r0);
+  save();
+  if(c.dirty)syncAgain=true;
+}
+function pullData(cd,v){
+  S.materias=cd.materias;S.eventos=cd.eventos;S.links=cd.links;normalize();
+  S.cloud={uid:AU.uid,base:v,dirty:false,at:Date.now()};save();
+  render();toast("Datos actualizados desde tu cuenta");
+}
+async function syncNow(){
+  if(!cloudOn()||!AU)return;
+  if(syncBusy){syncAgain=true;return}
+  if(navigator.onLine===false){syncErr="offline";paintAcct();return}
+  syncBusy=true;syncErr="";lastTry=Date.now();paintAcct();
+  try{
+    var tok=await getToken(),doc=await cloudGet(tok),c=S.cloud,v=doc?doc.updateTime:"",cd=null;
+    if(doc){cd=parseCloud(doc);if(!cd)throw mkErr("BADDOC")}
+    var mine=c.uid===AU.uid;
+    if(!doc){
+      if(hasData())await pushData(tok,"new");
+      else{c.uid=AU.uid;c.base="";c.dirty=false;save()}
+    }else if(mine&&c.base===v){
+      if(c.dirty)await pushData(tok,v);
+    }else if(sameData(cd)){
+      c.uid=AU.uid;c.base=v;c.dirty=false;c.at=Date.now();save();
+    }else if((!hasData()&&!(mine&&c.dirty))||(mine&&c.base&&!c.dirty)){
+      if(canTouchUI())pullData(cd,v);else pendingPull=true;
+    }else{
+      if(canTouchUI())conflictSheet(cd,v);else pendingPull=true;
+    }
+    retries=0;
+    if(AU&&AU.verified!==true)refreshVerified();
+  }catch(e){
+    if(e.kick)kickOut();
+    else if(e.status===409||e.status===412||/^(FAILED_PRECONDITION|ABORTED|ALREADY_EXISTS)$/.test(e.fsStatus||"")){
+      if(retries++<2)syncAgain=true;else{syncErr="No se pudo sincronizar porque hubo cambios al mismo tiempo. Probá de nuevo.";retries=0}
+    }
+    else syncErr=e.status==null?"offline":(e.code==="BADDOC"?"No se pudieron leer los datos de tu cuenta.":"No se pudo sincronizar ("+(e.code||e.status)+").");
+  }
+  syncBusy=false;paintAcct();
+  if(syncAgain){syncAgain=false;syncSoon(400,true)}
+}
+function syncSoon(ms,force){
+  if(!cloudOn()||!AU)return;
+  if(!force&&Date.now()-lastTry<20000)return;
+  clearTimeout(syncT);syncT=setTimeout(function(){syncNow()},ms==null?1500:ms);
+}
+
+/* --- conflictos: datos distintos en la cuenta y en este dispositivo --- */
+function cnt(o){return o.materias.length+" materia"+(o.materias.length===1?"":"s")+", "+o.eventos.length+" evento"+(o.eventos.length===1?"":"s")}
+function conflictSheet(cd,v){
+  pendingConf={cd:cd,v:v};$("#toast").hidden=true;
+  openSheet('<div class="sheet-h"><h2>Tus datos no coinciden</h2>'+closeBtn+'</div>'+
+    '<p class="msg">Hay datos distintos en tu cuenta y en este dispositivo. Elegí cuáles conservar.</p>'+
+    '<p class="msg"><b>Este dispositivo:</b> '+cnt(S)+'<br><b>Tu cuenta:</b> '+cnt(cd)+'</p>'+
+    '<div class="actions"><button class="btn primary" data-act="cfMerge">Juntar los dos</button>'+
+    '<button class="btn ghost" data-act="cfCloud">Usar los de mi cuenta</button>'+
+    '<button class="btn ghost" data-act="cfLocal">Usar los de este dispositivo</button></div>'+
+    '<p class="hint" style="margin-top:12px">«Juntar» suma lo que hay en los dos; si algo está repetido, queda la versión de este dispositivo. Las otras dos opciones reemplazan lo que hay del otro lado.</p>');
+}
+async function resolveConflict(how){
+  var p=pendingConf;if(!p)return;pendingConf=null;closeSheet();
+  if(how==="cloud"){pullData(p.cd,p.v);return}
+  if(how==="merge"){
+    S.materias=mergeBy(S.materias,p.cd.materias);S.eventos=mergeBy(S.eventos,p.cd.eventos);S.links=mergeBy(S.links,p.cd.links);
+    normalize();rev++;save();render();
+  }
+  syncBusy=true;syncErr="";paintAcct();
+  try{var tok=await getToken();await pushData(tok,p.v);toast("Listo, quedó sincronizado")}
+  catch(e){S.cloud.dirty=true;save();syncErr=e.status==null?"offline":"No se pudo subir ("+(e.code||e.status)+"). Probá de nuevo."}
+  syncBusy=false;paintAcct(true);
+}
+
+/* --- pantalla de cuenta (en Campus) --- */
+function ago(t){
+  var s=Math.round((Date.now()-t)/1000);if(s<45)return "hace un momento";
+  var m=Math.round(s/60);if(m<60)return "hace "+m+" min";
+  var h=Math.round(m/60);if(h<24)return "hace "+h+" h";
+  return "el "+new Date(t).toLocaleDateString("es-AR",{day:"numeric",month:"short"});
+}
+function syncStatus(){
+  if(syncBusy)return "Sincronizando…";
+  if(syncErr==="offline")return "Sin conexión. Se sincroniza cuando vuelvas a tener internet.";
+  if(syncErr)return syncErr;
+  var c=S.cloud||{};
+  if(!AU||c.uid!==AU.uid||!c.base)return "Todavía no se sincronizó.";
+  if(c.dirty)return "Hay cambios sin subir.";
+  return "Sincronizado "+(c.at?ago(c.at):"");
+}
+function acctCard(){
+  if(!cloudOn())return "";
+  var h='<h3 class="sec">Cuenta</h3><div class="card set">';
+  if(!AU){
+    h+='<p class="acct-p">Es opcional. Con una cuenta, tu agenda, tus materias y tus horarios se guardan en la nube y los podés usar en otros dispositivos. Sin cuenta, todo sigue funcionando solo en este teléfono.</p>'+
+      '<div class="actions"><button class="btn primary" data-act="auth" data-m="up">Crear cuenta</button><button class="btn ghost" data-act="auth" data-m="in">Ya tengo cuenta</button></div>'+
+      '<p class="hint">Se guarda tu mail y lo que cargues acá. Nunca se usa la clave del campus.</p>';
+  }else{
+    h+='<div class="set-r"><span>Sesión iniciada</span><div class="acct-mail">'+esc(AU.email)+'</div>'+
+      (AU.verified===false?'<div><span class="tag late">Mail sin confirmar</span> <button class="mini" data-act="resendVerify">Reenviar mail</button></div>':'')+'</div>'+
+      '<div class="set-r"><span>Estado</span><div class="hint" id="acctSt">'+esc(syncStatus())+'</div></div>'+
+      '<div class="actions"><button class="btn primary" id="acctSync" data-act="syncNow"'+(syncBusy?' disabled':'')+'>Sincronizar ahora</button><button class="btn ghost" data-act="signOut">Cerrar sesión</button></div>'+
+      '<button class="mini acct-del" data-act="delAcct">Eliminar mi cuenta</button>';
+  }
+  return h+'</div>';
+}
+var repaintLater=false;
+function paintAcct(full){
+  if(view!=="campus")return;
+  if(full){if($("#overlay").hidden)renderContent();else repaintLater=true;return}
+  var el=$("#acctSt");if(el)el.textContent=syncStatus();
+  var b=$("#acctSync");if(b)b.disabled=syncBusy;
+}
+var MAIL_RE=/^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+function authSheet(m){
+  var up=m==="up";
+  openSheet('<div class="sheet-h"><h2>'+(up?"Crear cuenta":"Ingresar")+'</h2>'+closeBtn+'</div>'+
+    '<label>Mail<input id="a_e" type="email" inputmode="email" autocomplete="email" autocapitalize="off" autocorrect="off" spellcheck="false" maxlength="120"></label>'+
+    '<label>Contraseña<input id="a_p" type="password" autocomplete="'+(up?"new-password":"current-password")+'" maxlength="100"></label>'+
+    (up?'<p class="hint" style="margin-top:8px">Mínimo 6 caracteres. Es una contraseña propia de esta app: <b>no uses la del campus</b>. Te mandamos un mail para confirmar tu dirección.</p>'
+       :'<button type="button" class="mini" data-act="forgot" style="margin-top:6px">Olvidé mi contraseña</button>')+
+    '<p class="err" id="f_err"></p><p id="f_ok"></p>'+
+    '<div class="actions"><button class="btn primary" id="a_go" data-act="authGo" data-m="'+m+'">'+(up?"Crear cuenta":"Ingresar")+'</button>'+
+    '<button class="btn ghost" data-act="auth" data-m="'+(up?"in":"up")+'">'+(up?"Ya tengo cuenta":"Crear una cuenta")+'</button></div>');
+}
+async function authGo(m){
+  var e=($("#a_e").value||"").trim(),p=$("#a_p").value||"";
+  if(!MAIL_RE.test(e))return fe("Escribí un mail válido.");
+  if(!p)return fe("Escribí tu contraseña.");
+  if(m==="up"&&p.length<6)return fe("La contraseña tiene que tener al menos 6 caracteres.");
+  var b=$("#a_go"),old=b.textContent;b.disabled=true;b.textContent="Un momento…";fe("");
+  try{
+    await doAuth(m,e,p);
+    closeSheet();renderContent();
+    toast(m==="up"?"Cuenta creada. Te mandamos un mail para confirmarla.":"Sesión iniciada");
+    syncSoon(100,true);
+  }catch(x){
+    var b2=$("#a_go");if(b2){b2.disabled=false;b2.textContent=old}
+    fe(errMsg(x));
+  }
+}
+async function forgot(){
+  var e=($("#a_e").value||"").trim(),ok=$("#f_ok");
+  if(!MAIL_RE.test(e))return fe("Escribí tu mail arriba y volvé a tocar «Olvidé mi contraseña».");
+  fe("");
+  try{await idCall("sendOobCode",{requestType:"PASSWORD_RESET",email:e})}
+  catch(x){if(x.code!=="EMAIL_NOT_FOUND")return fe(errMsg(x))}
+  if(ok)ok.textContent="Si ese mail tiene cuenta, te mandamos un enlace para cambiar la contraseña. Revisá también la carpeta de spam.";
+}
+async function resend(){
+  try{var t=await getToken();await idCall("sendOobCode",{requestType:"VERIFY_EMAIL",idToken:t});toast("Te mandamos el mail de confirmación")}
+  catch(x){toast(errMsg(x))}
+}
+async function signOutSheet(){
+  if(S.cloud.dirty&&navigator.onLine!==false){await syncNow();if(!$("#overlay").hidden)return}
+  var d=!!S.cloud.dirty;
+  openSheet('<div class="sheet-h"><h2>Cerrar sesión</h2>'+closeBtn+'</div>'+
+    '<p class="msg">'+(d?"Ojo: tenés cambios que todavía no se subieron a tu cuenta. Si además borrás los datos de este dispositivo, se pierden."
+      :"Tus datos quedan guardados en tu cuenta. Podés dejar una copia en este dispositivo o borrarla (útil si es un teléfono compartido).")+'</p>'+
+    '<div class="actions"><button class="btn primary" data-act="signOutGo" data-w="0">Cerrar sesión</button>'+
+    '<button class="btn danger" data-act="signOutGo" data-w="1">Cerrar sesión y borrar los datos de este dispositivo</button>'+
+    '<button class="btn ghost" data-act="close">Cancelar</button></div>');
+}
+function signOutGo(wipe){
+  AU=null;authSave();S.cloud={};
+  if(wipe){S.materias=[];S.eventos=[];S.links=[]}
+  save();closeSheet();render();
+  toast(wipe?"Sesión cerrada y datos borrados de este dispositivo":"Sesión cerrada");
+}
+function delAcctSheet(){
+  openSheet('<div class="sheet-h"><h2>Eliminar mi cuenta</h2>'+closeBtn+'</div>'+
+    '<p class="msg">Se borra tu cuenta y todo lo que guardaste en la nube. Los datos que tenés en este dispositivo no se tocan. No se puede deshacer.</p>'+
+    '<label>Escribí tu contraseña para confirmar<input id="d_p" type="password" autocomplete="current-password" maxlength="100"></label>'+
+    '<p class="err" id="f_err"></p>'+
+    '<div class="actions"><button class="btn danger" id="d_go" data-act="delAcctGo">Eliminar mi cuenta</button><button class="btn ghost" data-act="close">Cancelar</button></div>');
+}
+async function delAcctGo(){
+  var p=$("#d_p").value||"";
+  if(!p)return fe("Escribí tu contraseña para confirmar.");
+  var b=$("#d_go");b.disabled=true;fe("");
+  try{
+    var r=await idCall("signInWithPassword",{email:AU.email,password:p,returnSecureToken:true});
+    setSession(r,AU.email);
+    var tok=AU.idToken;
+    try{await jfetch(docUrl(),{method:"DELETE",headers:{Authorization:"Bearer "+tok}})}catch(e){if(e.status!==404)throw e}
+    await idCall("delete",{idToken:tok});
+    AU=null;authSave();S.cloud={};save();closeSheet();render();
+    toast("Cuenta eliminada. Tus datos siguen en este dispositivo.");
+  }catch(x){
+    var b2=$("#d_go");if(b2)b2.disabled=false;
+    fe(errMsg(x));
+  }
+}
+document.addEventListener("visibilitychange",function(){if(!document.hidden)syncSoon(400,false)});
+window.addEventListener("online",function(){syncSoon(300,true)});
+window.addEventListener("offline",function(){if(AU){syncErr="offline";paintAcct()}});
 
 /* ---------- acciones ---------- */
 function act(a,d,el){
@@ -861,6 +1165,18 @@ function act(a,d,el){
     case "uiReset": S.ui={theme:"auto",glass:null,spring:"normal"};save();applyUI();renderContent();toast("Apariencia restablecida");break;
     case "filter": filter=d.v;render();break;
     case "close": closeSheet();break;
+    case "auth": authSheet(d.m);break;
+    case "authGo": authGo(d.m);break;
+    case "forgot": forgot();break;
+    case "syncNow": syncNow();break;
+    case "resendVerify": resend();break;
+    case "signOut": signOutSheet();break;
+    case "signOutGo": signOutGo(d.w==="1");break;
+    case "delAcct": delAcctSheet();break;
+    case "delAcctGo": delAcctGo();break;
+    case "cfMerge": resolveConflict("merge");break;
+    case "cfCloud": resolveConflict("cloud");break;
+    case "cfLocal": resolveConflict("local");break;
     case "toggle":
       x=S.eventos.find(function(e){return e.id===d.id});
       if(x){
@@ -934,9 +1250,10 @@ function act(a,d,el){
       if(!raw)return fe("Pegá primero la copia de seguridad.");
       try{o2=JSON.parse(raw);if(o2&&o2.data)o2=o2.data}catch(e){return fe("Ese texto no es una copia válida.")}
       if(!o2||typeof o2!=="object"||!["materias","eventos"].every(function(k){return Array.isArray(o2[k])}))return fe("Ese texto no es una copia válida.");
-      S={materias:o2.materias,eventos:o2.eventos,apuntes:Array.isArray(o2.apuntes)?o2.apuntes:[],links:Array.isArray(o2.links)?o2.links:[],ui:o2.ui};
-      normalize();save();applyUI();
-      closeSheet();render();toast("Datos restaurados");break;}
+      var cl0=S.cloud;
+      S={materias:o2.materias,eventos:o2.eventos,apuntes:Array.isArray(o2.apuntes)?o2.apuntes:[],links:Array.isArray(o2.links)?o2.links:[],ui:o2.ui,cloud:cl0};
+      normalize();if(AU){S.cloud.dirty=true;rev++}save();applyUI();
+      closeSheet();render();toast("Datos restaurados");syncSoon(1500,true);break;}
   }
 }
 
@@ -952,7 +1269,10 @@ document.addEventListener("input",function(e){
   blankField(e);
   if(e.target.id==="ui_glass"){S.ui.glass=(+e.target.value)/100;applyUI();save()}
 });
-document.addEventListener("keydown",function(e){if(e.key==="Escape"&&!$("#overlay").hidden)closeSheet()});
+document.addEventListener("keydown",function(e){
+  if(e.key==="Escape"&&!$("#overlay").hidden)closeSheet();
+  if(e.key==="Enter"&&e.target&&(e.target.id==="a_e"||e.target.id==="a_p"||e.target.id==="d_p")){var g=$("#a_go")||$("#d_go");if(g&&!g.disabled){e.preventDefault();g.click()}}
+});
 document.addEventListener("visibilitychange",function(){if(!document.hidden&&$("#overlay").hidden)render()});
 
 
@@ -961,7 +1281,8 @@ try{if("serviceWorker" in navigator&&location.protocol.indexOf("http")===0)windo
 $("#hdrLogo").src=LOGO;
 (function(){var t0=today0();calY=t0.getFullYear();calM=t0.getMonth();calSel=iso(t0)})();
 buildTabs();
-load();applyUI();render();syncTabs(false);
+load();authLoad();applyUI();render();syncTabs(false);
+if(AU)syncSoon(600,true);
 /* refresca "En curso / Próxima" cada minuto */
 setInterval(function(){if(!document.hidden&&$("#overlay").hidden&&!drag&&(view==="horario"||view==="campus"))renderContent()},60000);
 })();
