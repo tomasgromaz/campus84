@@ -1,0 +1,16 @@
+{
+  "name": "Campus ISFD 84 · Mi app",
+  "short_name": "Campus 84",
+  "description": "Accesos al campus del ISFD N°84 y mi agenda de estudio.",
+  "lang": "es-AR",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#e9f4fb",
+  "theme_color": "#e9f4fb",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
