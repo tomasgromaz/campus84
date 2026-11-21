@@ -1,8 +1,8 @@
 /* Service worker: la app abre sin conexión.
    Estrategia "stale-while-revalidate": muestra lo guardado y se actualiza en segundo plano.
    Solo guarda los archivos propios de la app (nunca el campus ni otras webs). */
-const CACHE = "campus84-v8";
-const FILES = ["./", "./index.html", "./manifest.webmanifest", "./icon-180.png", "./icon-192.png", "./icon-512.png"];
+const CACHE = "campus84-v11";
+const FILES = ["./", "./index.html", "./manifest.webmanifest", "./icon-180.png", "./icon-192.png", "./icon-512.png", "./icon-180-dark.png", "./icon-192-dark.png"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FILES)).then(() => self.skipWaiting()));
